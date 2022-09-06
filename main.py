@@ -84,10 +84,11 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
 
         # get the samples into the buffer and normalize
         samples = getSamples(mySDR, rxStream, numSamplesPerSingleRead, numSamplesPerDFT)
+        dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
 
         # print out the maximum value in the spectrum analyzer
-        # print("Maximum received in: " + str((frequencyVector[np.argmax(np.abs(signal))] + rx_freq) / 1e6) + " MHz")
+        print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec = \
             kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration)
