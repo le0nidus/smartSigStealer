@@ -140,7 +140,7 @@ if __name__ == '__main__':
     # print menu
     print(printMenu.__doc__)
 
-    freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate1))
+    freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
 
     mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs)
 
