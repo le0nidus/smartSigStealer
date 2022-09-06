@@ -94,17 +94,12 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
             if recordFlag:
                 print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
                 print(np.argmax(np.abs(dft)))
-                # recordedSamples = np.append([samples])
-                recordedSamples = np.append(recordedSamples, samples[:])
-                print(recordedSamples)
             else:
                 print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
                 print(np.argmax(np.abs(dft)))
                 recordFlag = True
                 recordedSamples = oldSamples
-                recordedSamples = np.append(recordedSamples, samples[:])
-
-
+            recordedSamples = np.append(recordedSamples, samples[:])
 
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec = \
