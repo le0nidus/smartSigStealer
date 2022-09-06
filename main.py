@@ -80,17 +80,32 @@ def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
 def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, rx_freq, rxStream,
                   runBool, freqVec):
     # receive samples
+    recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
+    oldSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
+    recordFlag = False
     while runBool:
 
         # get the samples into the buffer and normalize
         samples = getSamples(mySDR, rxStream, numSamplesPerSingleRead, numSamplesPerDFT)
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
-
-        # print out the maximum value in the spectrum analyzer
+        # print out the maximum value
         if (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq):
-            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
-            print(np.argmax(np.abs(dft)))
+            if recordFlag:
+                print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+                print(np.argmax(np.abs(dft)))
+                # recordedSamples = np.append([samples])
+                recordedSamples = np.append(recordedSamples, samples[:])
+                print(recordedSamples)
+            else:
+                print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+                print(np.argmax(np.abs(dft)))
+                recordFlag = True
+                recordedSamples = oldSamples
+                recordedSamples = np.append(recordedSamples, samples[:])
+
+
+
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec = \
             kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration)
