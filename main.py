@@ -88,7 +88,9 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
 
 
         # print out the maximum value in the spectrum analyzer
-        print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+        if (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq):
+            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+            print(np.argmax(np.abs(dft)))
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec = \
             kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration)
