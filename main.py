@@ -90,16 +90,23 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
         # print out the maximum value
-        if (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq):
-            if recordFlag:
-                print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
-                print(np.argmax(np.abs(dft)))
-            else:
-                print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
-                print(np.argmax(np.abs(dft)))
+        peakDetectedBool = (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
+        if peakDetectedBool:
+            time_initial = time.time()
+            time_final = time_initial
+            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+
+            if not recordFlag:
+                print("Started recording")
                 recordFlag = True
-                recordedSamples = oldSamples
+
             recordedSamples = np.append(recordedSamples, samples[:])
+        elif ((not peakDetectedBool) and recordFlag):
+            recordedSamples = np.append(recordedSamples, samples[:])
+            time_final = time.time()
+            if (time_final - time_initial > 3):
+                recordFlag = False
+                print("Finished recording")
 
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec = \
