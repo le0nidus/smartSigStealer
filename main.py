@@ -37,17 +37,6 @@ def quitStream(sdrDevice, stream):
     sdrDevice.closeStream(stream)
 
 
-# Change bool state
-def changeBoolState(optionStr, iBool):
-    if iBool:
-        print("\n" + optionStr + " disabled")
-        iBool = False
-    else:
-        print("\n" + optionStr + " enabled")
-        iBool = True
-    return iBool
-
-
 # Keyboard choice (menu choices)
 def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIteration):
     paramsChanged = False
@@ -81,11 +70,10 @@ def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
 
 
 def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, rx_freq, rxStream,
-                  runBool, freqVec):
+                  runBool, freqVec, peakThreshold, timeAfterLastPeak):
     # receive samples
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
-    recordFlag = False
-    parametersChangedBool = False
+    recordFlag = parametersChangedBool = False
     numOfRecordings = 0
     while runBool:
 
@@ -95,13 +83,13 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
         # detect peak and its' frequency
-        peakDetectedBool = (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
+        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and\
+                           ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
         if peakDetectedBool:
-            time_lastPeak  = time.time()  # get current time of peak
-            time_final  = time.time()  # final peak happened now
+            time_lastPeak = time_final = time.time()  # get current time of peak + final peak happened now
             if not recordFlag:  # start recording the signal if it's the first time we detect it
                 print("Started recording")
-                time_initial = time.time()
+                time_initiatedRecording = time.time()
                 recordFlag = True
 
             # declare everytime we encounter a peak
@@ -114,11 +102,12 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         elif ((not peakDetectedBool) and recordFlag):
             recordedSamples = np.append(recordedSamples, samples[:])  # we still record (maybe OOK signal...)
             time_final = time.time()
-            if (time_final - time_lastPeak) > 3:  # if we encounter 3 seconds of silence since last peak
+            if (time_final - time_lastPeak) > timeAfterLastPeak:  # if we encounter 3 seconds of silence since last peak
                 # stop recording to variable and save to file
                 recordFlag = False
-                numOfRecordings += 1
-                print("Finished recording, recorded " + str(round(time_final - time_initial, 4)) + " seconds")
+                numOfRecordings += 1  # Recording number
+                recordingTime = time_final - time_initiatedRecording # How much time the recording took
+                print("Finished recording, recorded " + str(round(recordingTime, 4)) + " seconds")
                 recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
 
@@ -169,7 +158,9 @@ if __name__ == '__main__':
     RX_gain = configfile.RX_GAIN
 
     runBool = configfile.BOOL_RUN
-    changeSampleRateBool = configfile.BOOL_CHANGE_SAMPLE_RATE
+
+    peakThreshold = configfile.PEAK_THRESHOLD
+    timeAfterLastPeak = configfile.SILENCE_AFTER_LAST_PEAK
 
     #in keyboard is_pressed it re-prints if the function won't sleep
     cancelRePrintSleepTime = configfile.CANCEL_REPRINT_SLEEP_TIME
@@ -184,7 +175,8 @@ if __name__ == '__main__':
 
     freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
 
-    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs)
+    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs,
+                  peakThreshold, timeAfterLastPeak)
 
 
     # shutdown the stream
