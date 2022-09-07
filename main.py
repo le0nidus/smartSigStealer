@@ -84,7 +84,8 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                   runBool, freqVec):
     # receive samples
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
-    recordFlag, parametersChangedBool = False
+    recordFlag = False
+    parametersChangedBool = False
     numOfRecordings = 0
     while runBool:
 
@@ -96,8 +97,8 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         # detect peak and its' frequency
         peakDetectedBool = (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
         if peakDetectedBool:
-            time_lastPeak, time_final = time.time()  # get current time of peak + final peak happened now
-
+            time_lastPeak  = time.time()  # get current time of peak
+            time_final  = time.time()  # final peak happened now
             if not recordFlag:  # start recording the signal if it's the first time we detect it
                 print("Started recording")
                 time_initial = time.time()
