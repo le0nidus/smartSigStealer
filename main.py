@@ -50,20 +50,23 @@ def changeBoolState(optionStr, iBool):
 
 # Keyboard choice (menu choices)
 def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIteration):
+    paramsChanged = False
     if keyboard.is_pressed("1"):
         myRXSampleRate = int(float(input("\nEnter desired sample rate (in MHz): ")) * 1e6)
         mySDR.setSampleRate(SOAPY_SDR_RX, 0, myRXSampleRate)
         freqVec = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / myRXSampleRate))
+        paramsChanged = True
     if keyboard.is_pressed("2"):
         myRXFreq = int(float(input("\nEnter desired frequency (in MHz): ")) * 1e6)
         mySDR.setFrequency(SOAPY_SDR_RX, 0, myRXFreq)
+        paramsChanged = True
     elif keyboard.is_pressed("9"):
         print(printMenu.__doc__)
         time.sleep(cancelRePrintSleepTime)
     elif keyboard.is_pressed("0"):
         print("\nYou chose to quit, ending loop")
         rnBool = False
-    return myRXFreq, myRXSampleRate, mySDR, rnBool, freqVec
+    return myRXFreq, myRXSampleRate, mySDR, rnBool, freqVec, paramsChanged
 
 
 # Get samples from sdr, but in a loop (read small number of samples every time)
@@ -83,6 +86,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
     oldSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
     recordFlag = False
+    parametersChangedBool = False
     while runBool:
 
         # get the samples into the buffer and normalize
@@ -92,25 +96,30 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         # print out the maximum value
         peakDetectedBool = (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
         if peakDetectedBool:
-            time_initial = time.time()
-            time_final = time_initial
-            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
-
+            time_lastPeak = time.time()
+            time_final = time_lastPeak
             if not recordFlag:
                 print("Started recording")
+                time_initial = time.time()
                 recordFlag = True
-
+            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
             recordedSamples = np.append(recordedSamples, samples[:])
         elif ((not peakDetectedBool) and recordFlag):
             recordedSamples = np.append(recordedSamples, samples[:])
             time_final = time.time()
-            if (time_final - time_initial > 3):
+            if (time_final - time_lastPeak > 3):
                 recordFlag = False
-                print("Finished recording")
+                print("Finished recording, recorded " + str(round(time_final - time_initial, 4)) + " seconds")
+                recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
 
-
-        rx_freq, sampleRate, mySDR0, runBool, freqVec = \
+        rx_freq, sampleRate, mySDR0, runBool, freqVec, parametersChangedBool = \
             kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration)
+
+        if parametersChangedBool:
+            recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
+            if recordFlag:
+                print("Recording stopped")
+                recordFlag = False
     return
 
 
