@@ -87,6 +87,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
     oldSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
     recordFlag = False
     parametersChangedBool = False
+    numOfRecordings = 0
     while runBool:
 
         # get the samples into the buffer and normalize
@@ -109,7 +110,9 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
             time_final = time.time()
             if (time_final - time_lastPeak > 3):
                 recordFlag = False
+                numOfRecordings += 1
                 print("Finished recording, recorded " + str(round(time_final - time_initial, 4)) + " seconds")
+                recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
 
         rx_freq, sampleRate, mySDR0, runBool, freqVec, parametersChangedBool = \
@@ -118,8 +121,9 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         if parametersChangedBool:
             recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
             if recordFlag:
-                print("Recording stopped")
+                print("Recording stopped because SDR parameters changed")
                 recordFlag = False
+
     return
 
 
