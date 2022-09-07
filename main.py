@@ -84,31 +84,37 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                   runBool, freqVec):
     # receive samples
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
-    oldSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
-    recordFlag = False
-    parametersChangedBool = False
+    recordFlag, parametersChangedBool = False
     numOfRecordings = 0
     while runBool:
 
-        # get the samples into the buffer and normalize
+        # get the samples
         samples = getSamples(mySDR, rxStream, numSamplesPerSingleRead, numSamplesPerDFT)
+        # dft on samples to find the freq of the detected peak
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
-        # print out the maximum value
+        # detect peak and its' frequency
         peakDetectedBool = (np.argmax(np.abs(dft)) > 500) and ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
         if peakDetectedBool:
-            time_lastPeak = time.time()
-            time_final = time_lastPeak
-            if not recordFlag:
+            time_lastPeak, time_final = time.time()  # get current time of peak + final peak happened now
+
+            if not recordFlag:  # start recording the signal if it's the first time we detect it
                 print("Started recording")
                 time_initial = time.time()
                 recordFlag = True
+
+            # declare everytime we encounter a peak
             print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+
+            # save the signal
             recordedSamples = np.append(recordedSamples, samples[:])
+
+        # if there is no peak but recording is still running
         elif ((not peakDetectedBool) and recordFlag):
-            recordedSamples = np.append(recordedSamples, samples[:])
+            recordedSamples = np.append(recordedSamples, samples[:])  # we still record (maybe OOK signal...)
             time_final = time.time()
-            if (time_final - time_lastPeak > 3):
+            if (time_final - time_lastPeak) > 3:  # if we encounter 3 seconds of silence since last peak
+                # stop recording to variable and save to file
                 recordFlag = False
                 numOfRecordings += 1
                 print("Finished recording, recorded " + str(round(time_final - time_initial, 4)) + " seconds")
@@ -118,9 +124,11 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         rx_freq, sampleRate, mySDR0, runBool, freqVec, parametersChangedBool = \
             kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration)
 
+        # if user changed one of the parameters
         if parametersChangedBool:
-            recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
+            recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
             if recordFlag:
+                # if it was in the middle of a recording
                 print("Recording stopped because SDR parameters changed")
                 recordFlag = False
 
