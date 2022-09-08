@@ -79,7 +79,7 @@ def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
     samples = np.zeros(numOfRequestedSamples, dtype=np.complex64)
     iterations = int(numOfRequestedSamples / samplesPerScan)
     for j in range(iterations):
-        sr = device.readStream(stream, [samples[((j-1)*samplesPerScan):]], samplesPerScan)
+        sr = device.readStream(stream, [samples[((j - 1) * samplesPerScan):]], samplesPerScan)
     # normalize the sample values
     # sr = device.readStream(stream, [samples], numOfRequestedSamples)
     return samples
@@ -103,8 +103,8 @@ def analyzeFiles(samplesPerIteration, samp_rate_TX, centerFreq_TX, bandwidth_TX,
                     initializeHackRF(samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX, SOAPY_SDR_TX)
                     stream_TX = setStream(sdr, SOAPY_SDR_TX)
                     print("Starting stream of " + fname)
-                    for i in range(int(sampleLen/samplesPerIteration)):
-                        samplesToStream = samplesIQ[(i*samplesPerIteration):((i*samplesPerIteration)-1)]
+                    for i in range(int(sampleLen / samplesPerIteration)):
+                        samplesToStream = samplesIQ[(i * samplesPerIteration):((i * samplesPerIteration) - 1)]
                         status = sdr.writeStream(stream_TX, [samplesToStream], samplesPerIteration)
                         if status.ret != samplesPerIteration:
                             raise Exception('transmit failed %s' % str(status))
@@ -128,7 +128,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, peakThreshol
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
         # detect peak and its' frequency
-        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and\
+        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and \
                            ((rx_freqVec[np.argmax(np.abs(dft))] + rx_centerFreq) != rx_centerFreq)
         if peakDetectedBool:
             time_lastPeak = time_final = time.time()  # get current time of peak + final peak happened now
@@ -151,7 +151,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, peakThreshol
                 # stop recording to variable and save to file
                 recordFlag = False
                 numOfRecordings += 1  # Recording number
-                recordingTime = time_final - time_initiatedRecording # How much time the recording took
+                recordingTime = time_final - time_initiatedRecording  # How much time the recording took
                 print("Finished recording, recorded " + str(round(recordingTime, 4)) + " seconds")
                 recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
@@ -161,7 +161,6 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, peakThreshol
                         rx_stream, rx_sampleRate, rx_centerFreq, rx_freqVec, rx_bandwidth, rx_gain,
                         tx_sampleRate, tx_centerFreq, tx_bandwidth, tx_gain)
 
-
         # If user changed one of the parameters
         if parametersChangedBool:
             recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
@@ -170,7 +169,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, peakThreshol
                 print("Recording stopped because SDR parameters changed")
                 recordFlag = False
 
-    return
+    return rx_stream
 
 
 # print the main menu for our spectrum analyzer
@@ -215,7 +214,7 @@ if __name__ == '__main__':
     samplesPerIteration = configFileWrite.SAMPLES_PER_ITERATION
     gain_TX = configFileWrite.TX_GAIN
 
-    #in keyboard is_pressed it re-prints if the function won't sleep
+    # in keyboard is_pressed it re-prints if the function won't sleep
     cancelRePrintSleepTime = configFileRead.CANCEL_REPRINT_SLEEP_TIME
 
     initializeHackRF(samp_rate_RX, centerFreq_RX, bandwidth_RX, gain_RX, SOAPY_SDR_RX)
@@ -228,11 +227,9 @@ if __name__ == '__main__':
 
     freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate_RX))
 
-
-    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, peakThreshold, timeAfterLastPeak, runBool,
-                  stream_RX, samp_rate_RX, centerFreq_RX, freqs, bandwidth_RX, gain_RX,
-                  samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX)
-
+    stream_RX = mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, peakThreshold, timeAfterLastPeak, runBool,
+                              stream_RX, samp_rate_RX, centerFreq_RX, freqs, bandwidth_RX, gain_RX,
+                              samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX)
 
     # shutdown the stream
     quitStream(sdr, stream_RX)
