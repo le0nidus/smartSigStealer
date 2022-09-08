@@ -1,6 +1,6 @@
 # SoapySDR is the API for the hackrf
 import SoapySDR
-from SoapySDR import Device, SOAPY_SDR_RX, SOAPY_SDR_CF32
+from SoapySDR import Device, SOAPY_SDR_TX, SOAPY_SDR_CF32
 # Using pyfftw instead of numpy to calculate fft faster
 from pyfftw import interfaces
 from pyfftw.interfaces import numpy_fft as fastnumpyfft
@@ -13,20 +13,22 @@ import keyboard
 import time
 # use the defaults from variable file
 import configfile
+import glob
+import matplotlib.pyplot as plt
+import os
 
 
 # apply initial settings to HackRF device
 def initializeHackRF(fs, f_rx, bw, gain):
-    sdr.setSampleRate(SOAPY_SDR_RX, 0, fs)
-    sdr.setBandwidth(SOAPY_SDR_RX, 0, bw)
-    sdr.setFrequency(SOAPY_SDR_RX, 0, f_rx)
-    sdr.setGain(SOAPY_SDR_RX, 0, gain)
+    sdr.setSampleRate(SOAPY_SDR_TX, 0, fs)
+    sdr.setBandwidth(SOAPY_SDR_TX, 0, bw)
+    sdr.setFrequency(SOAPY_SDR_TX, 0, f_rx)
+    sdr.setGain(SOAPY_SDR_TX, 0, gain)
 
 
 # setup a stream (complex floats)
 def setStream(sdrDevice):
-    stream = sdrDevice.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32)
-    print(sdr.getStreamMTU(stream))
+    stream = sdrDevice.setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32)
     sdrDevice.activateStream(stream)  # start streaming
     return stream
 
@@ -64,20 +66,9 @@ def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIter
     return myRXFreq, myRXSampleRate, mySDR, rnBool, freqVec, silenceTime, peakThresholdVal, paramsChanged
 
 
-# Get samples from sdr, but in a loop (read small number of samples every time)
-def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
-    samples = np.zeros(numOfRequestedSamples, dtype=np.complex64)
-    iterations = int(numOfRequestedSamples / samplesPerScan)
-    for j in range(iterations):
-        sr = device.readStream(stream, [samples[((j-1)*samplesPerScan):]], samplesPerScan)
-    # normalize the sample values
-    # sr = device.readStream(stream, [samples], numOfRequestedSamples)
-    return samples
-
-
 def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, rx_freq, rxStream,
                   runBool, freqVec, peakThreshold, timeAfterLastPeak):
-    # re0ceive samples
+    # receive samples
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
     recordFlag = parametersChangedBool = False
     numOfRecordings = 0
@@ -89,7 +80,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
         # detect peak and its' frequency
-        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and\
+        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and \
                            ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
         if peakDetectedBool:
             time_lastPeak = time_final = time.time()  # get current time of peak + final peak happened now
@@ -112,7 +103,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                 # stop recording to variable and save to file
                 recordFlag = False
                 numOfRecordings += 1  # Recording number
-                recordingTime = time_final - time_initiatedRecording # How much time the recording took
+                recordingTime = time_final - time_initiatedRecording  # How much time the recording took
                 print("Finished recording, recorded " + str(round(recordingTime, 4)) + " seconds")
                 recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
@@ -156,8 +147,7 @@ if __name__ == '__main__':
     args = dict(driver="hackrf")
     sdr = SoapySDR.Device(args)
 
-    a = 0.0
-    print(sdr.getStreamFormats(SOAPY_SDR_RX, 0))
+    print(sdr.getStreamFormats(SOAPY_SDR_TX, 0))
 
     bandwidth = configfile.BANDWIDTH
     samp_rate = configfile.SAMPLE_RATE
@@ -168,25 +158,44 @@ if __name__ == '__main__':
 
     runBool = configfile.BOOL_RUN
 
-    peakThreshold = configfile.PEAK_THRESHOLD
-    timeAfterLastPeak = configfile.SILENCE_AFTER_LAST_PEAK
-
-    #in keyboard is_pressed it re-prints if the function won't sleep
+    # in keyboard is_pressed it re-prints if the function won't sleep
     cancelRePrintSleepTime = configfile.CANCEL_REPRINT_SLEEP_TIME
 
-    initializeHackRF(samp_rate, rx_freq, bandwidth, RX_gain)
+    tx_freq = 315 * 1e6
+    RX_gain = 46
+    initializeHackRF(samp_rate, tx_freq, bandwidth, RX_gain)
 
     # setup a stream
-    rxStream = setStream(sdr)
+    txStream = setStream(sdr)
 
     # print menu
-    print(printMenu.__doc__)
+    # print(printMenu.__doc__)
 
-    freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
+    # freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
 
-    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs,
-                  peakThreshold, timeAfterLastPeak)
+    # mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs,
+    #               peakThreshold, timeAfterLastPeak)
 
+    if not glob.glob('*.iq'):
+        print("No IQ files found")
+    else:
+        for filename in os.listdir('.'):
+            if filename.endswith('.iq'):
+                print("Opening " + filename + "...")
+                samplesArr = np.fromfile(filename, np.complex64)
+                samplesIQ = samplesArr[::2] + 1j * samplesArr[1::2]  # convert to IQIQIQ...
+                sampleLen = np.size(samplesIQ)
+                print(str(sampleLen) + " samples")
+                usrInput = str(input("\nStream the transmission now? [Y/N]: "))
+                if usrInput == "N":
+                    break
+                elif usrInput == "Y":
+                    for i in range(int(sampleLen/samplesPerIteration)):
+                        samplesToStream = samplesIQ[(i*samplesPerIteration):((i*samplesPerIteration)-1)]
+                        status = sdr.writeStream(txStream, [samplesToStream], samplesPerIteration)
+                        if status.ret != samplesPerIteration:
+                            raise Exception('transmit failed %s' % str(status))
 
+    time.sleep(3) # just for debugging
     # shutdown the stream
-    quitStream(sdr, rxStream)
+    # quitStream(sdr, rxStream)
