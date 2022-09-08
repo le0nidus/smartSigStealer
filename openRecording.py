@@ -26,7 +26,7 @@ def initializeHackRF(fs, center_freq, bw, gain, soapyDirection):
     sdr.setGain(soapyDirection, 0, gain)
 
 
-def analyzeFiles():
+def analyzeFiles(samplesPerIteration):
     if not glob.glob('*.iq'):
         print("No IQ files found")
     else:
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     # setup a stream
     stream_TX = setStream(sdr, SOAPY_SDR_TX)
 
-    analyzeFiles()
+    analyzeFiles(samplesPerIteration)
 
     # shutdown the stream
     quitStream(sdr, stream_TX)
