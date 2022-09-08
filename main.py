@@ -16,17 +16,16 @@ import configFileRead
 
 
 # apply initial settings to HackRF device
-def initializeHackRF(fs, f_rx, bw, gain):
-    sdr.setSampleRate(SOAPY_SDR_RX, 0, fs)
-    sdr.setBandwidth(SOAPY_SDR_RX, 0, bw)
-    sdr.setFrequency(SOAPY_SDR_RX, 0, f_rx)
-    sdr.setGain(SOAPY_SDR_RX, 0, gain)
+def initializeHackRF(fs, center_freq, bw, gain, soapyDirection):
+    sdr.setSampleRate(soapyDirection, 0, fs)
+    sdr.setBandwidth(soapyDirection, 0, bw)
+    sdr.setFrequency(soapyDirection, 0, center_freq)
+    sdr.setGain(soapyDirection, 0, gain)
 
 
 # setup a stream (complex floats)
-def setStream(sdrDevice):
-    stream = sdrDevice.setupStream(SOAPY_SDR_RX, SOAPY_SDR_CF32)
-    print(sdr.getStreamMTU(stream))
+def setStream(sdrDevice, soapyDirection):
+    stream = sdrDevice.setupStream(soapyDirection, SOAPY_SDR_CF32)
     sdrDevice.activateStream(stream)  # start streaming
     return stream
 
@@ -75,7 +74,7 @@ def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
     return samples
 
 
-def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, rx_freq, rxStream,
+def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, centerFreq_rx, stream_RX,
                   runBool, freqVec, peakThreshold, timeAfterLastPeak):
     # re0ceive samples
     recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
@@ -84,13 +83,13 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
     while runBool:
 
         # get the samples
-        samples = getSamples(mySDR, rxStream, numSamplesPerSingleRead, numSamplesPerDFT)
+        samples = getSamples(mySDR, stream_RX, numSamplesPerSingleRead, numSamplesPerDFT)
         # dft on samples to find the freq of the detected peak
         dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
 
         # detect peak and its' frequency
         peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and\
-                           ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
+                           ((freqVec[np.argmax(np.abs(dft))] + centerFreq_rx) != centerFreq_rx)
         if peakDetectedBool:
             time_lastPeak = time_final = time.time()  # get current time of peak + final peak happened now
             if not recordFlag:  # start recording the signal if it's the first time we detect it
@@ -99,7 +98,7 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                 recordFlag = True
 
             # declare everytime we encounter a peak
-            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
+            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + centerFreq_rx) / 1e6) + " MHz")
 
             # save the signal
             recordedSamples = np.append(recordedSamples, samples[:])
@@ -117,8 +116,8 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                 recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
 
-        rx_freq, sampleRate, mySDR0, runBool, freqVec, timeAfterLastPeak, peakThreshold, parametersChangedBool = \
-            kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration, timeAfterLastPeak,
+        centerFreq_rx, sampleRate, mySDR0, runBool, freqVec, timeAfterLastPeak, peakThreshold, parametersChangedBool = \
+            kbUsrChoice(mySDR, centerFreq_rx, sampleRate, runBool, freqVec, samplesPerIteration, timeAfterLastPeak,
                         peakThreshold)
 
         # If user changed one of the parameters
@@ -155,38 +154,34 @@ if __name__ == '__main__':
     # args can be user defined or from the enumeration result
     args = dict(driver="hackrf")
     sdr = SoapySDR.Device(args)
-
-    a = 0.0
     print(sdr.getStreamFormats(SOAPY_SDR_RX, 0))
 
-    bandwidth = configFileRead.BANDWIDTH
-    samp_rate = configFileRead.SAMPLE_RATE
-    rx_freq = configFileRead.RX_FREQ
+    bandwidth_RX = configFileRead.BANDWIDTH
+    samp_rate_RX = configFileRead.SAMPLE_RATE
+    centerFreq_RX = configFileRead.RX_FREQ
     samplesPerIteration = configFileRead.SAMPLES_PER_ITERATION
     samplesPerRead = configFileRead.SAMPLES_PER_READ
-    RX_gain = configFileRead.RX_GAIN
-
+    gain_RX = configFileRead.RX_GAIN
     runBool = configFileRead.BOOL_RUN
-
     peakThreshold = configFileRead.PEAK_THRESHOLD
     timeAfterLastPeak = configFileRead.SILENCE_AFTER_LAST_PEAK
 
     #in keyboard is_pressed it re-prints if the function won't sleep
     cancelRePrintSleepTime = configFileRead.CANCEL_REPRINT_SLEEP_TIME
 
-    initializeHackRF(samp_rate, rx_freq, bandwidth, RX_gain)
+    initializeHackRF(samp_rate_RX, centerFreq_RX, bandwidth_RX, gain_RX, SOAPY_SDR_RX)
 
     # setup a stream
-    rxStream = setStream(sdr)
+    stream_RX = setStream(sdr, SOAPY_SDR_RX)
 
     # print menu
     print(printMenu.__doc__)
 
-    freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
+    freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate_RX))
 
-    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs,
+    mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate_RX, centerFreq_RX, stream_RX, runBool, freqs,
                   peakThreshold, timeAfterLastPeak)
 
 
     # shutdown the stream
-    quitStream(sdr, rxStream)
+    quitStream(sdr, stream_RX)
