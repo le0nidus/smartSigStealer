@@ -39,101 +39,6 @@ def quitStream(sdrDevice, stream):
     sdrDevice.closeStream(stream)
 
 
-# Keyboard choice (menu choices)
-def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIteration, silenceTime, peakThresholdVal):
-    paramsChanged = False
-    if keyboard.is_pressed("1"):
-        myRXSampleRate = int(float(input("\nEnter desired sample rate (in MHz): ")) * 1e6)
-        mySDR.setSampleRate(SOAPY_SDR_RX, 0, myRXSampleRate)
-        freqVec = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / myRXSampleRate))
-        paramsChanged = True
-    elif keyboard.is_pressed("2"):
-        myRXFreq = int(float(input("\nEnter desired frequency (in MHz): ")) * 1e6)
-        mySDR.setFrequency(SOAPY_SDR_RX, 0, myRXFreq)
-        paramsChanged = True
-    elif keyboard.is_pressed("3"):
-        silenceTime = int(float(input("\nEnter desired wait time after peak (in seconds): ")))
-        paramsChanged = True
-    elif keyboard.is_pressed("4"):
-        peakThresholdVal = int(float(input("\nEnter desired peak threshold value (1-2047): ")))
-        paramsChanged = True
-    elif keyboard.is_pressed("9"):
-        print(printMenu.__doc__)
-        time.sleep(cancelRePrintSleepTime)
-    elif keyboard.is_pressed("0"):
-        print("\nYou chose to quit, ending loop")
-        rnBool = False
-    return myRXFreq, myRXSampleRate, mySDR, rnBool, freqVec, silenceTime, peakThresholdVal, paramsChanged
-
-
-def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, rx_freq, rxStream,
-                  runBool, freqVec, peakThreshold, timeAfterLastPeak):
-    # receive samples
-    recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)
-    recordFlag = parametersChangedBool = False
-    numOfRecordings = 0
-    while runBool:
-
-        # get the samples
-        samples = getSamples(mySDR, rxStream, numSamplesPerSingleRead, numSamplesPerDFT)
-        # dft on samples to find the freq of the detected peak
-        dft = fastnumpyfft.fftshift(fastnumpyfft.fft(samples, numSamplesPerDFT))
-
-        # detect peak and its' frequency
-        peakDetectedBool = (np.argmax(np.abs(dft)) > peakThreshold) and \
-                           ((freqVec[np.argmax(np.abs(dft))] + rx_freq) != rx_freq)
-        if peakDetectedBool:
-            time_lastPeak = time_final = time.time()  # get current time of peak + final peak happened now
-            if not recordFlag:  # start recording the signal if it's the first time we detect it
-                print("Started recording")
-                time_initiatedRecording = time.time()
-                recordFlag = True
-
-            # declare everytime we encounter a peak
-            print("Maximum received in: " + str((freqVec[np.argmax(np.abs(dft))] + rx_freq) / 1e6) + " MHz")
-
-            # save the signal
-            recordedSamples = np.append(recordedSamples, samples[:])
-
-        # if there is no peak but recording is still running
-        elif ((not peakDetectedBool) and recordFlag):
-            recordedSamples = np.append(recordedSamples, samples[:])  # we still record (maybe OOK signal...)
-            time_final = time.time()
-            if (time_final - time_lastPeak) > timeAfterLastPeak:  # if we encounter X seconds of silence since last peak
-                # stop recording to variable and save to file
-                recordFlag = False
-                numOfRecordings += 1  # Recording number
-                recordingTime = time_final - time_initiatedRecording  # How much time the recording took
-                print("Finished recording, recorded " + str(round(recordingTime, 4)) + " seconds")
-                recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
-                recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
-
-        rx_freq, sampleRate, mySDR0, runBool, freqVec, timeAfterLastPeak, peakThreshold, parametersChangedBool = \
-            kbUsrChoice(mySDR, rx_freq, sampleRate, runBool, freqVec, samplesPerIteration, timeAfterLastPeak,
-                        peakThreshold)
-
-        # If user changed one of the parameters
-        if parametersChangedBool:
-            recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
-            if recordFlag:
-                # if it was in the middle of a recording
-                print("Recording stopped because SDR parameters changed")
-                recordFlag = False
-
-    return
-
-
-# print the main menu for our spectrum analyzer
-def printMenu():
-    '''Choose one from the options:
-    1 - Change sample rate
-    2 - Change RX frequency
-    3 - Change silence time
-    4 - Change peak threshold value
-    9 - Print menu again
-    0 - Quit'''
-
-
 if __name__ == '__main__':
     # window()
 
@@ -164,9 +69,6 @@ if __name__ == '__main__':
 
     # setup a stream
     txStream = setStream(sdr)
-
-    # print menu
-    # print(printMenu.__doc__)
 
     if not glob.glob('*.iq'):
         print("No IQ files found")
