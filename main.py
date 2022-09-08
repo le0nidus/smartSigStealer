@@ -1,6 +1,6 @@
 # SoapySDR is the API for the hackrf
 import SoapySDR
-from SoapySDR import Device, SOAPY_SDR_RX, SOAPY_SDR_CF32
+from SoapySDR import Device, SOAPY_SDR_RX, SOAPY_SDR_TX, SOAPY_SDR_CF32
 # Using pyfftw instead of numpy to calculate fft faster
 from pyfftw import interfaces
 from pyfftw.interfaces import numpy_fft as fastnumpyfft
@@ -13,6 +13,9 @@ import keyboard
 import time
 # use the defaults from variable file
 import configFileRead
+import configFileWrite
+import glob
+import os
 
 
 # apply initial settings to HackRF device
@@ -37,16 +40,17 @@ def quitStream(sdrDevice, stream):
 
 
 # Keyboard choice (menu choices)
-def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIteration, silenceTime, peakThresholdVal):
+def kbUsrChoice(mySDR, myRXfreq, myRXsampleRate, rnBool, freqVec, samplesPerIteration, silenceTime, peakThresholdVal,
+                myTXsampleRate, myTXfreq, myTXbandwidth, myTXgain, myRXstream, myRXbandwidth, myRXgain):
     paramsChanged = False
     if keyboard.is_pressed("1"):
-        myRXSampleRate = int(float(input("\nEnter desired sample rate (in MHz): ")) * 1e6)
-        mySDR.setSampleRate(SOAPY_SDR_RX, 0, myRXSampleRate)
-        freqVec = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / myRXSampleRate))
+        myRXsampleRate = int(float(input("\nEnter desired sample rate (in MHz): ")) * 1e6)
+        mySDR.setSampleRate(SOAPY_SDR_RX, 0, myRXsampleRate)
+        freqVec = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / myRXsampleRate))
         paramsChanged = True
     elif keyboard.is_pressed("2"):
-        myRXFreq = int(float(input("\nEnter desired frequency (in MHz): ")) * 1e6)
-        mySDR.setFrequency(SOAPY_SDR_RX, 0, myRXFreq)
+        myRXfreq = int(float(input("\nEnter desired frequency (in MHz): ")) * 1e6)
+        mySDR.setFrequency(SOAPY_SDR_RX, 0, myRXfreq)
         paramsChanged = True
     elif keyboard.is_pressed("3"):
         silenceTime = int(float(input("\nEnter desired wait time after peak (in seconds): ")))
@@ -54,13 +58,19 @@ def kbUsrChoice(mySDR, myRXFreq, myRXSampleRate, rnBool, freqVec, samplesPerIter
     elif keyboard.is_pressed("4"):
         peakThresholdVal = int(float(input("\nEnter desired peak threshold value (1-2047): ")))
         paramsChanged = True
+    elif keyboard.is_pressed("5"):
+        print("Stopped listening, starting file analyzation and streaming..")
+        analyzeFiles(samplesPerIteration, myTXsampleRate, myTXfreq, myTXbandwidth, myTXgain, mySDR, myRXstream)
+        print("Stopped file analyzation and streaming, continuing to listen..")
+        initializeHackRF(myRXsampleRate, myRXfreq, myRXbandwidth, myRXgain, SOAPY_SDR_RX)
+        myRXstream = setStream(mySDR, SOAPY_SDR_TX)
     elif keyboard.is_pressed("9"):
         print(printMenu.__doc__)
         time.sleep(cancelRePrintSleepTime)
     elif keyboard.is_pressed("0"):
         print("\nYou chose to quit, ending loop")
         rnBool = False
-    return myRXFreq, myRXSampleRate, mySDR, rnBool, freqVec, silenceTime, peakThresholdVal, paramsChanged
+    return myRXfreq, myRXsampleRate, rnBool, freqVec, silenceTime, peakThresholdVal, paramsChanged, myRXstream
 
 
 # Get samples from sdr, but in a loop (read small number of samples every time)
@@ -72,6 +82,34 @@ def getSamples(device, stream, samplesPerScan, numOfRequestedSamples):
     # normalize the sample values
     # sr = device.readStream(stream, [samples], numOfRequestedSamples)
     return samples
+
+
+def analyzeFiles(samplesPerIteration, samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX, sdr, stream_RX):
+    if not glob.glob('*.iq'):
+        print("No IQ files found")
+    else:
+        quitStream(sdr, stream_RX)
+        for fname in os.listdir('.'):
+            if fname.endswith('.iq'):
+                samplesArr = np.fromfile(fname, np.complex64)
+                samplesIQ = samplesArr[::2] + 1j * samplesArr[1::2]  # convert to IQIQIQ...
+                sampleLen = np.size(samplesIQ)
+                print("Opening " + fname + " , it contains " + str(sampleLen) + " samples")
+                usrInput = str(input("Stream the transmission now? [Y/N]: "))
+                if usrInput == "N":
+                    break
+                elif usrInput == "Y":
+                    initializeHackRF(samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX, SOAPY_SDR_TX)
+                    stream_TX = setStream(sdr, SOAPY_SDR_TX)
+                    print("Starting stream of " + fname)
+                    for i in range(int(sampleLen/samplesPerIteration)):
+                        samplesToStream = samplesIQ[(i*samplesPerIteration):((i*samplesPerIteration)-1)]
+                        status = sdr.writeStream(stream_TX, [samplesToStream], samplesPerIteration)
+                        if status.ret != samplesPerIteration:
+                            raise Exception('transmit failed %s' % str(status))
+                    print("Stopped stream of " + fname)
+                    quitStream(sdr, stream_TX)
+    return
 
 
 def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, centerFreq_rx, stream_RX,
@@ -116,10 +154,10 @@ def mainWhileLoop(numSamplesPerDFT, numSamplesPerSingleRead, mySDR, sampleRate, 
                 recordedSamples.tofile('recording' + str(numOfRecordings) + '.iq')  # Save to file
                 recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
 
-        centerFreq_rx, sampleRate, mySDR0, runBool, freqVec, timeAfterLastPeak, peakThreshold, parametersChangedBool = \
-            kbUsrChoice(mySDR, centerFreq_rx, sampleRate, runBool, freqVec, samplesPerIteration, timeAfterLastPeak,
-                        peakThreshold)
 
+        centerFreq_rx, sampleRate, runBool, freqVec, timeAfterLastPeak, peakThreshold, parametersChangedBool, myRXstream = \
+            kbUsrChoice(mySDR, centerFreq_rx, sampleRate, runBool, freqVec, samplesPerIteration, timeAfterLastPeak,
+                        peakThreshold, samp_rate_TX, centerFreq_TX, bandwidth_TX, gain_TX, stream_RX, bandwidth_RX, gain_RX)
         # If user changed one of the parameters
         if parametersChangedBool:
             recordedSamples = np.zeros(numSamplesPerDFT, dtype=np.complex64)  # reset the recording variable
@@ -138,6 +176,7 @@ def printMenu():
     2 - Change RX frequency
     3 - Change silence time
     4 - Change peak threshold value
+    5 - Analyze files and transmit
     9 - Print menu again
     0 - Quit'''
 
@@ -166,6 +205,12 @@ if __name__ == '__main__':
     peakThreshold = configFileRead.PEAK_THRESHOLD
     timeAfterLastPeak = configFileRead.SILENCE_AFTER_LAST_PEAK
 
+    bandwidth_TX = configFileWrite.BANDWIDTH
+    samp_rate_TX = configFileWrite.SAMPLE_RATE
+    centerFreq_TX = configFileWrite.TX_FREQ + (0.1666 * 1e6)
+    samplesPerIteration = configFileWrite.SAMPLES_PER_ITERATION
+    gain_TX = configFileWrite.TX_GAIN
+
     #in keyboard is_pressed it re-prints if the function won't sleep
     cancelRePrintSleepTime = configFileRead.CANCEL_REPRINT_SLEEP_TIME
 
@@ -178,6 +223,7 @@ if __name__ == '__main__':
     print(printMenu.__doc__)
 
     freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate_RX))
+
 
     mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate_RX, centerFreq_RX, stream_RX, runBool, freqs,
                   peakThreshold, timeAfterLastPeak)
