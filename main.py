@@ -12,7 +12,7 @@ import keyboard
 # use time for creating delays (remove re-prints)
 import time
 # use the defaults from variable file
-import configfile
+import configFileRead
 
 
 # apply initial settings to HackRF device
@@ -159,20 +159,20 @@ if __name__ == '__main__':
     a = 0.0
     print(sdr.getStreamFormats(SOAPY_SDR_RX, 0))
 
-    bandwidth = configfile.BANDWIDTH
-    samp_rate = configfile.SAMPLE_RATE
-    rx_freq = configfile.RX_FREQ
-    samplesPerIteration = configfile.SAMPLES_PER_ITERATION
-    samplesPerRead = configfile.SAMPLES_PER_READ
-    RX_gain = configfile.RX_GAIN
+    bandwidth = configFileRead.BANDWIDTH
+    samp_rate = configFileRead.SAMPLE_RATE
+    rx_freq = configFileRead.RX_FREQ
+    samplesPerIteration = configFileRead.SAMPLES_PER_ITERATION
+    samplesPerRead = configFileRead.SAMPLES_PER_READ
+    RX_gain = configFileRead.RX_GAIN
 
-    runBool = configfile.BOOL_RUN
+    runBool = configFileRead.BOOL_RUN
 
-    peakThreshold = configfile.PEAK_THRESHOLD
-    timeAfterLastPeak = configfile.SILENCE_AFTER_LAST_PEAK
+    peakThreshold = configFileRead.PEAK_THRESHOLD
+    timeAfterLastPeak = configFileRead.SILENCE_AFTER_LAST_PEAK
 
     #in keyboard is_pressed it re-prints if the function won't sleep
-    cancelRePrintSleepTime = configfile.CANCEL_REPRINT_SLEEP_TIME
+    cancelRePrintSleepTime = configFileRead.CANCEL_REPRINT_SLEEP_TIME
 
     initializeHackRF(samp_rate, rx_freq, bandwidth, RX_gain)
 

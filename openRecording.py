@@ -12,7 +12,7 @@ import keyboard
 # use time for creating delays (remove re-prints)
 import time
 # use the defaults from variable file
-import configfile
+import configFileWrite
 import glob
 import matplotlib.pyplot as plt
 import os
@@ -149,32 +149,24 @@ if __name__ == '__main__':
 
     print(sdr.getStreamFormats(SOAPY_SDR_TX, 0))
 
-    bandwidth = configfile.BANDWIDTH
-    samp_rate = configfile.SAMPLE_RATE
-    rx_freq = configfile.RX_FREQ
-    samplesPerIteration = configfile.SAMPLES_PER_ITERATION
-    samplesPerRead = configfile.SAMPLES_PER_READ
-    RX_gain = configfile.RX_GAIN
-
-    runBool = configfile.BOOL_RUN
+    bandwidth = configFileWrite.BANDWIDTH
+    samp_rate = configFileWrite.SAMPLE_RATE
+    tx_freq = configFileWrite.TX_FREQ
+    samplesPerIteration = configFileWrite.SAMPLES_PER_ITERATION
+    tx_gain = configFileWrite.TX_GAIN
 
     # in keyboard is_pressed it re-prints if the function won't sleep
-    cancelRePrintSleepTime = configfile.CANCEL_REPRINT_SLEEP_TIME
+    cancelRePrintSleepTime = configFileWrite.CANCEL_REPRINT_SLEEP_TIME
 
     tx_freq = 315 * 1e6
-    RX_gain = 46
-    initializeHackRF(samp_rate, tx_freq, bandwidth, RX_gain)
+    tx_gain = 46
+    initializeHackRF(samp_rate, tx_freq, bandwidth, tx_gain)
 
     # setup a stream
     txStream = setStream(sdr)
 
     # print menu
     # print(printMenu.__doc__)
-
-    # freqs = fastnumpyfft.fftshift(fastnumpyfft.fftfreq(samplesPerIteration, d=1 / samp_rate))
-
-    # mainWhileLoop(samplesPerIteration, samplesPerRead, sdr, samp_rate, rx_freq, rxStream, runBool, freqs,
-    #               peakThreshold, timeAfterLastPeak)
 
     if not glob.glob('*.iq'):
         print("No IQ files found")
@@ -196,6 +188,5 @@ if __name__ == '__main__':
                         if status.ret != samplesPerIteration:
                             raise Exception('transmit failed %s' % str(status))
 
-    time.sleep(3) # just for debugging
     # shutdown the stream
-    # quitStream(sdr, rxStream)
+    quitStream(sdr, txStream)
